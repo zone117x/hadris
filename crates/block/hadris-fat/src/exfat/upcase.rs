@@ -11,6 +11,9 @@ use crate::io::{Read, Seek, SeekFrom};
 
 use super::ExFatInfo;
 
+/// The most bytes an up-case table can hold: 65536 entries of two bytes.
+const UPCASE_TABLE_MAX_BYTES: u64 = 65536 * 2;
+
 /// Up-case table for case-insensitive filename matching.
 ///
 /// The table contains 65536 entries (one for each BMP code point).
@@ -90,6 +93,15 @@ impl UpcaseTable {
         if size > volume_capacity {
             return Err(Error::ExFatInvalidEntry {
                 reason: "upcase table size exceeds volume capacity",
+            });
+        }
+        // The table maps at most 65536 code points to two bytes each, and a
+        // compressed table is smaller still, so a larger `data_length` is not
+        // a table. This bounds the read buffer on a large volume too, where
+        // the capacity check alone would allow gigabytes.
+        if size > UPCASE_TABLE_MAX_BYTES {
+            return Err(Error::ExFatInvalidEntry {
+                reason: "upcase table larger than 65536 entries",
             });
         }
 
