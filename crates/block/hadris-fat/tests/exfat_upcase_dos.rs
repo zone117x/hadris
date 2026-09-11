@@ -56,6 +56,35 @@ fn tiny_info() -> ExFatInfo {
     }
 }
 
+/// A volume of a million 32 KiB clusters, whose capacity check alone would
+/// admit a table of gigabytes.
+fn large_info() -> ExFatInfo {
+    ExFatInfo {
+        bytes_per_sector: 512,
+        sectors_per_cluster: 64,
+        bytes_per_cluster: 32 * 1024,
+        fat_offset: 0,
+        fat_length: 0,
+        cluster_heap_offset: 0,
+        cluster_count: 1 << 20,
+        root_cluster: 2,
+        volume_serial: 0,
+        fat_count: 1,
+    }
+}
+
+#[test]
+fn upcase_data_length_beyond_the_tables_maximum_does_not_preallocate() {
+    let info = large_info();
+    let mut data = Cursor::new(Vec::<u8>::new());
+    let mut table = UpcaseTable::new();
+    // data_length claims 1 GiB, within the volume's capacity but far past the
+    // 128 KiB a table of 65536 entries takes. Must return an error, not
+    // attempt the allocation (which the capped allocator turns into an abort).
+    let result = table.load(&mut data, &info, 2, 1 << 30, true);
+    assert!(result.is_err());
+}
+
 #[test]
 fn oversized_upcase_data_length_does_not_preallocate() {
     let info = tiny_info();
